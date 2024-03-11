@@ -1,0 +1,361 @@
+import pandas as pd
+import random
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Define number of entries
+num_entries = 1000
+
+# Define column names and data generation functions
+data = {
+    "Maternal_age (years)": lambda: random.randint(18, 40),
+    "Parity": lambda: random.randint(0, 5),
+    "Pre-existing conditions": lambda: random.choices(["None", "Diabetes", "Hypertension", "Hypothyroidism"], weights=[80, 5, 5, 5])[0],
+    "Infections": lambda: "Yes" if random.random() < 0.2 else "No",
+    "BMI": lambda: random.randint(17, 40),
+    "Gestational_age (weeks)": lambda: random.randint(36, 41),
+    "Fetal_growth": lambda: random.choices(["Normal", "Macrosomia", "IUGR", "Severe IUGR"], weights=[70, 10, 7, 3])[0],
+    "Congenital_malformation": lambda: "Yes" if random.random() < 0.06 else "No",
+    "Duration_labor (hours)": lambda: int(random.gauss(10, 3)),  # Normally distributed around 10 hours
+    "Meconium_stained_fluid": lambda: random.choices(["Yes", "No"], weights=[90, 10])[0],
+    "Complications_during_labor": lambda: random.choices(["None", "Abruption", "Shoulder dystocia", "Bleeding"], weights=[96, 1, 1, 2])[0],
+    "Decelerations": lambda: random.choices(["None", "Early", "Late", "Variable"], weights=[45, 25, 25, 5])[0],
+    "Variability": lambda: random.choices(["Absent", "Minimal", "Moderate", "Marked"], weights=[1, 10, 85, 4])[0],
+    "Fetal_Baseline (bpm)": lambda: int(random.gauss(140, 15)),  # Normally distributed around 140 bpm
+    "Contractions/10 min": lambda: random.choices(["Irregular", "Less than 5", "More than 5"], weights=[20, 70, 10])[0],
+    # Adjusted Cord pH to be skewed to the right
+    "Cord pH": lambda: round(min(random.uniform(6.9, 7.35) + random.uniform(0, 0.5), 7.35), 2)
+}
+
+# Generate data for each entry
+df = pd.DataFrame({col: [data[col]() for _ in range(num_entries)] for col in data})
+
+# Display the first few rows of the dataframe
+print(df.head())
+
+# Save the data to a CSV file
+csv_file_path = "fetal_data_updated.csv"
+df.to_csv(csv_file_path, index=False)
+
+# Define numerical and categorical columns
+numerical_columns = ["Maternal_age (years)", "Parity", "BMI", "Gestational_age (weeks)", "Duration_labor (hours)", "Fetal_Baseline (bpm)"]
+categorical_columns = ["Pre-existing conditions", "Infections", "Fetal_growth", "Congenital_malformation",
+                       "Meconium_stained_fluid", "Complications_during_labor", "Decelerations",
+                       "Variability", "Contractions/10 min"]
+
+# Visualization of numerical columns
+for column in numerical_columns:
+    plt.figure(figsize=(8, 6))
+    sns.histplot(df[column], bins=20, color='skyblue', edgecolor='black')
+    plt.title(f'Histogram of {column}')
+    plt.xlabel(column)
+    plt.ylabel('Frequency')
+    plt.grid(True)
+    plt.show()
+
+# Visualization of categorical columns
+for column in categorical_columns:
+    plt.figure(figsize=(8, 6))
+    df[column].value_counts().plot(kind='pie', autopct='%1.1f%%', startangle=140)
+    plt.title(f'Pie Chart of {column}')
+    plt.ylabel('')
+    plt.axis('equal')
+    plt.show()
+
+# Density plot for 'Cord pH'
+plt.figure(figsize=(8, 6))
+sns.kdeplot(data=df['Cord pH'], shade=True, color="skyblue")
+plt.xlabel("Cord pH")
+plt.ylabel("Density")
+plt.title("Density Plot of Cord pH")
+plt.show()
+# One-hot encoding for categorical columns
+df = pd.get_dummies(df, columns=categorical_columns)
+
+# Splitting features (X) and target (y)
+X = df.drop(columns=['Cord pH'])
+y = df['Cord pH']
+# Model training and evaluation
+from sklearn.model_selection import train_test_split
+
+# Splitting the data into training and testing sets (70% training, 30% testing)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+# Regression models
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+# Define regression models
+models = {
+    'Linear Regression': LinearRegression(),
+    'Decision Tree Regression': DecisionTreeRegressor(),
+    'Random Forest Regression': RandomForestRegressor()
+}
+
+# Train and evaluate regression models
+for name, model in models.items():
+    model.fit(X_train, y_train)  # Train the model
+    y_pred = model.predict(X_test)  # Predict using the test set
+
+    # Compute regression evaluation metrics
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)  # Computing RMSE from MSE
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    # Print out the evaluation metrics
+    print(f"{name}:")
+    print(f"Mean Squared Error (MSE): {mse}")
+    print(f"Root Mean Squared Error (RMSE): {rmse}")
+    print(f"Mean Absolute Error (MAE): {mae}")
+    print(f"R-squared (R2): {r2}")
+    print()
+# Model training and evaluation with cross-validation
+from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import KFold
+import numpy as np
+
+# Define the number of folds for cross-validation
+num_folds = 5
+kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
+
+# Define regression models
+models = {
+    'Linear Regression': LinearRegression(),
+    'Decision Tree Regression': DecisionTreeRegressor(),
+    'Random Forest Regression': RandomForestRegressor()
+}
+
+# Train and evaluate regression models using cross-validation
+for name, model in models.items():
+    print(f"Model: {name}")
+    mse_scores = []
+    rmse_scores = []
+    mae_scores = []
+    r2_scores = []
+
+    for train_index, test_index in kf.split(X):
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+        model.fit(X_train, y_train)  # Train the model
+
+        y_pred = model.predict(X_test)  # Predict using the test set
+
+        # Compute regression evaluation metrics
+        mse = mean_squared_error(y_test, y_pred)
+        mse_scores.append(mse)
+        rmse = mean_squared_error(y_test, y_pred, squared=False)  # Computing RMSE from MSE
+        rmse_scores.append(rmse)
+        mae = mean_absolute_error(y_test, y_pred)
+        mae_scores.append(mae)
+        r2 = r2_score(y_test, y_pred)
+        r2_scores.append(r2)
+
+    # Print out the average evaluation metrics
+    print(f"Avg. Mean Squared Error (MSE): {np.mean(mse_scores)}")
+    print(f"Avg. Root Mean Squared Error (RMSE): {np.mean(rmse_scores)}")
+    print(f"Avg. Mean Absolute Error (MAE): {np.mean(mae_scores)}")
+    print(f"Avg. R-squared (R2): {np.mean(r2_scores)}")
+    print()
+
+    # Residual analysis
+    print("Residual Analysis:")
+    residuals = y_test - y_pred
+    plt.scatter(y_pred, residuals)
+    plt.xlabel("Predicted Values")
+    plt.ylabel("Residuals")
+    plt.title("Residual Plot")
+    plt.show()
+# Transforming cord pH into binary labels based on clinical thresholds
+df['Cord pH binary'] = (df['Cord pH'] < 7.25).astype(int)
+
+# Splitting the data into features (X_cls) and target (y_cls)
+X_cls = df.drop(columns=['Cord pH', 'Cord pH binary'])
+y_cls = df['Cord pH binary']
+
+# Splitting the data into training and testing sets for classification (70% training, 30% testing)
+X_train_cls, X_test_cls, y_train_cls, y_test_cls = train_test_split(X_cls, y_cls, test_size=0.3, random_state=42)
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+# Define classification models
+models_cls = {
+    'Logistic Regression': LogisticRegression(),
+    'Decision Tree Classifier': DecisionTreeClassifier(),
+    'Random Forest Classifier': RandomForestClassifier()
+}
+
+# Train and evaluate classification models
+for name, model in models_cls.items():
+    model.fit(X_train_cls, y_train_cls)  # Train the model
+    y_pred_cls = model.predict(X_test_cls)  # Predict using the test set
+    accuracy = accuracy_score(y_test_cls, y_pred_cls)  # Calculate accuracy
+    print(f"{name} - Accuracy: {accuracy}")
+def get_patient_data():
+    patient_data = {}
+    print("Please fill in the following information:")
+
+    # Loop to handle invalid input for each variable
+    while True:
+        try:
+            patient_data["Maternal_age (years)"] = int(input("1. What is the patient's age? (18-40 years): "))
+            if 18 <= patient_data["Maternal_age (years)"] <= 40:
+                break
+            else:
+                print("Invalid input. Age should be between 18 and 40 years.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    while True:
+        try:
+            patient_data["Parity"] = int(input("2. What is the patient's parity? (0-5): "))
+            if 0 <= patient_data["Parity"] <= 5:
+                break
+            else:
+                print("Invalid input. Parity should be between 0 and 5.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    while True:
+        patient_data["Pre-existing conditions"] = input("3. Does the patient have any pre-existing conditions? (None, Diabetes, Hypertension, Hypothyroidism): ").capitalize()
+        if patient_data["Pre-existing conditions"] in ['None', 'Diabetes', 'Hypertension', 'Hypothyroidism']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    while True:
+        patient_data["Infections"] = input("4. Does the patient have any kind of infection? (Yes/No): ").capitalize()
+        if patient_data["Infections"] in ['Yes', 'No']:
+            break
+        else:
+            print("Invalid input. Please enter 'Yes' or 'No'.")
+
+    while True:
+        try:
+            patient_data["BMI"] = float(input("5. What is the patient's BMI? (17-40): "))
+            if 17 <= patient_data["BMI"] <= 40:
+                break
+            else:
+                print("Invalid input. BMI should be between 17 and 40.")
+        except ValueError:
+            print("Invalid input. Please enter a valid number.")
+
+    while True:
+        try:
+            patient_data["Gestational_age (weeks)"] = int(input("6. What is the patient's gestational age? (36-41 weeks): "))
+            if 36 <= patient_data["Gestational_age (weeks)"] <= 41:
+                break
+            else:
+                print("Invalid input. Gestational age should be between 36 and 41 weeks.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    while True:
+        patient_data["Fetal_growth"] = input("7. In what weight category is the fetus? (Normal, Macrosomia, IUGR, Sever IUGR): ").capitalize()
+        if patient_data["Fetal_growth"] in ['Normal', 'Macrosomia', 'IUGR', 'Sever IUGR']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    while True:
+        patient_data["Congenital_malformation"] = input("8. Is there any congenital malformation? (Yes/No): ").capitalize()
+        if patient_data["Congenital_malformation"] in ['Yes', 'No']:
+            break
+        else:
+            print("Invalid input. Please enter 'Yes' or 'No'.")
+
+    while True:
+        try:
+            patient_data["Duration_labor (hours)"] = float(input("9. How much time in hours has the patient been in labor? (0-20 hours): "))
+            if 0 <= patient_data["Duration_labor (hours)"] <= 20:
+                break
+            else:
+                print("Invalid input. Labor duration should be between 0 and 20 hours.")
+        except ValueError:
+            print("Invalid input. Please enter a valid number.")
+
+    while True:
+        patient_data["Meconium_stained_fluid"] = input("10. Does the patient have meconium stained fluid? (Yes/No): ").capitalize()
+        if patient_data["Meconium_stained_fluid"] in ['Yes', 'No']:
+            break
+        else:
+            print("Invalid input. Please enter 'Yes' or 'No'.")
+
+    while True:
+        patient_data["Complications_during_labor"] = input("11. Did the patient experience any complications during labor? (None, Abruption, Shoulder dystocia, Bleeding): ").capitalize()
+        if patient_data["Complications_during_labor"] in ['None', 'Abruption', 'Shoulder dystocia', 'Bleeding']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    while True:
+        patient_data["Decelerations"] = input("12. Is there any deceleration on CTG? (None, Early, Late, Variable): ").capitalize()
+        if patient_data["Decelerations"] in ['None', 'Early', 'Late', 'Variable']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    while True:
+        try:
+            patient_data["Fetal_Baseline (bpm)"] = int(input("13. What is the fetal heart rate baseline? (90-180 bpm): "))
+            if 90 <= patient_data["Fetal_Baseline (bpm)"] <= 180:
+                break
+            else:
+                print("Invalid input. Fetal heart rate baseline should be between 90 and 180 bpm.")
+        except ValueError:
+            print("Invalid input. Please enter a valid integer.")
+
+    while True:
+        patient_data["Contractions/10 min"] = input("14. How many contractions in average are there in the CTG? (None, Less than 5/10 min, More than 5/10 min): ").capitalize()
+        if patient_data["Contractions/10 min"] in ['None', 'Less than 5/10 min', 'More than 5/10 min']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    while True:
+        patient_data["Variability"] = input("15. What is the baseline variability? (Absent, Minimal, Moderate, Marked): ").capitalize()
+        if patient_data["Variability"] in ['Absent', 'Minimal', 'Moderate', 'Marked']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    while True:
+        patient_data["Classification of CTG"] = input("16. What is your classification of this CTG? (Cat 1, Cat 2, Cat 3): ").capitalize()
+        if patient_data["Classification of CTG"] in ['Cat 1', 'Cat 2', 'Cat 3']:
+            break
+        else:
+            print("Invalid input. Please choose from the provided options.")
+
+    print("Thank you for entering the data.")
+    return patient_data
+
+
+# Getting user input
+user_input = get_patient_data()
+
+# Creating DataFrame from user input
+user_df = pd.DataFrame([user_input])
+
+# One-hot encoding for categorical columns
+user_df = pd.get_dummies(user_df, columns=categorical_columns, drop_first=True)
+
+# Reordering columns to match the original DataFrame
+user_df = user_df.reindex(columns=X.columns, fill_value=0)
+
+# Predicting cord pH using the best regression model
+best_model = RandomForestRegressor()  # Update with the best model
+best_model.fit(X_train, y_train)  # Train the best model
+predicted_cord_ph = best_model.predict(user_df)
+
+# Display the predicted cord pH
+print("Predicted Cord pH:", predicted_cord_ph[0])
+
+# Proceed to C-section if the predicted cord pH is less than 7.1, else continue with normal delivery
+if predicted_cord_ph[0] < 7.25:
+    print("Proceed to C-section.")
+else:
+    print("Continue with normal delivery.")
